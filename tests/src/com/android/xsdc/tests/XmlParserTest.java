@@ -38,7 +38,7 @@ public class XmlParserTest {
     public void testPurchaseSimple() throws Exception {
         TestCompilationResult result;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "purchase_simple.xsd")) {
+                "purchase_simple/purchase_simple.xsd")) {
             result = TestHelper.parseXsdAndCompile(in);
         }
 
@@ -74,7 +74,7 @@ public class XmlParserTest {
     public void testNestedType() throws Exception {
         TestCompilationResult result;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "nested_type.xsd")) {
+                "nested_type/nested_type.xsd")) {
             result = TestHelper.parseXsdAndCompile(in);
         }
 
@@ -104,15 +104,13 @@ public class XmlParserTest {
     public void testSimpleComplexContent() throws Exception {
         TestCompilationResult result;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "simple_complex_content.xsd")) {
+                "simple_complex_content/simple_complex_content.xsd")) {
             result = TestHelper.parseXsdAndCompile(in);
         }
 
         Class<?> xmlParser = result.loadClass("XmlParser");
         Class<?> person = result.loadClass("Person");
-        Class<?> shoeSize = result.loadClass("ShoeSize");
-        Class<?> generalPrice = result.loadClass("GeneralPrice");
-        Class<?> usAddress = result.loadClass("USAddress");
+        Class<?> usAddress = result.loadClass("USAddressP");
         Class<?> krAddress = result.loadClass("KRAddress");
 
         Object instance;
@@ -122,18 +120,8 @@ public class XmlParserTest {
         }
 
         String name = (String) person.getMethod("getName").invoke(instance);
-        Object shoeSizeInstance = person.getMethod("getShoeSize").invoke(instance);
-        String sizing = (String) shoeSize.getMethod("getSizing").invoke(shoeSizeInstance);
-        BigDecimal shoeSizeValue = (BigDecimal) shoeSize.getMethod("getValue").invoke(
-                shoeSizeInstance);
 
-        Object generalPriceInstance = person.getMethod("getGeneralPrice").invoke(instance);
-        String currency = (String) generalPrice.getMethod("getCurrency").invoke(
-                generalPriceInstance);
-        BigDecimal generalPriceValue = (BigDecimal) generalPrice.getMethod("getValue").invoke(
-                generalPriceInstance);
-
-        Object usAddressInstance = person.getMethod("getUSAddress").invoke(instance);
+        Object usAddressInstance = person.getMethod("getUSAddressP").invoke(instance);
         String usStreet = (String) usAddress.getMethod("getStreet").invoke(usAddressInstance);
         BigInteger usZipcode = (BigInteger) usAddress.getMethod("getZipcode").invoke(
                 usAddressInstance);
@@ -143,9 +131,7 @@ public class XmlParserTest {
 
         assertThat(name, is("Petr"));
         assertThat(sizing, is("Korea"));
-        assertThat(shoeSizeValue, is(new BigDecimal("265")));
         assertThat(currency, is("dollar"));
-        assertThat(generalPriceValue, is(new BigDecimal("1234.5678")));
         assertThat(usStreet, is("street fighter"));
         assertThat(usZipcode, is(new BigInteger("3232323183298523436434")));
         assertThat(krStreet, is("Nokdu Street"));
@@ -155,7 +141,7 @@ public class XmlParserTest {
     public void testPredefinedTypes() throws Exception {
         TestCompilationResult result;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "predefined_types.xsd")) {
+                "predefined_types/predefined_types.xsd")) {
             result = TestHelper.parseXsdAndCompile(in);
         }
 
@@ -349,7 +335,7 @@ public class XmlParserTest {
 
         Object instance;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "simple_type.xml")) {
+                "simple_type/simple_type.xml")) {
             instance = xmlParser.getMethod("read", InputStream.class).invoke(null, in);
         }
 
@@ -364,7 +350,7 @@ public class XmlParserTest {
     public void testReference() throws Exception {
         TestCompilationResult result;
         try (InputStream in = this.getClass().getClassLoader().getResourceAsStream(
-                "reference.xsd")) {
+                "reference/reference.xsd")) {
             result = TestHelper.parseXsdAndCompile(in);
         }
 
