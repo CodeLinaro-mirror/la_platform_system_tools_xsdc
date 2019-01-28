@@ -16,20 +16,29 @@
 
 package com.android.xsdc.tag;
 
+import java.util.Collections;
+import java.util.List;
 import com.android.xsdc.XsdParserException;
 
 public class XsdRestriction extends XsdSimpleType {
     final private XsdType base;
+    final private List<XsdEnumeration> enums;
 
-    public XsdRestriction(String name, XsdType base) throws XsdParserException {
+    public XsdRestriction(String name, XsdType base, List<XsdEnumeration> enums)
+            throws XsdParserException {
         super(name);
         if (base == null) {
             throw new XsdParserException("restriction base should exist in simpleType");
         }
         this.base = base;
+        this.enums = enums;
     }
 
     public XsdType getBase() {
         return base;
+    }
+
+    public List<XsdEnumeration> getEnums() {
+        return enums;
     }
 }
