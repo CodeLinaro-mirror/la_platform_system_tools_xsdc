@@ -47,7 +47,8 @@ public class JavaCodeGenerator {
             Set<String> nameSet = new HashSet<>();
             nameSet.add("XmlParser");
             for (XsdType type : xmlSchema.getTypeMap().values()) {
-                if (type instanceof XsdComplexType) {
+                if ((type instanceof XsdComplexType) || (type instanceof XsdRestriction &&
+                        ((XsdRestriction)type).getEnums() != null)) {
                     String name = Utils.toClassName(type.getName());
                     if (nameSet.contains(name)) {
                         throw new JavaCodeGeneratorException(
@@ -88,6 +89,14 @@ public class JavaCodeGenerator {
                     out.printf("package %s;\n\n", packageName);
                     printClass(out, name, complexType, "");
                 }
+            } else if (type instanceof XsdRestriction &&
+                    ((XsdRestriction)type).getEnums() != null) {
+                String name = Utils.toClassName(type.getName());
+                XsdRestriction restrictionType = (XsdRestriction) type;
+                try (CodeWriter out = new CodeWriter(fs.getPrintWriter(name + ".java"))) {
+                    out.printf("package %s;\n\n", packageName);
+                    printEnumClass(out, name, restrictionType);
+                }
             }
         }
         for (XsdElement element : xmlSchema.getElementMap().values()) {
@@ -104,6 +113,25 @@ public class JavaCodeGenerator {
         try (CodeWriter out = new CodeWriter(fs.getPrintWriter("XmlParser.java"))) {
             printXmlParser(out);
         }
+    }
+
+    private void printEnumClass(CodeWriter out, String name, XsdRestriction restrictionType)
+            throws JavaCodeGeneratorException {
+        out.printf("public enum %s {", name);
+        List<XsdEnumeration> enums = restrictionType.getEnums();
+
+        for (XsdEnumeration tag : enums) {
+            out.printf("\n%s(\"%s\"),", Utils.toEnumName(tag.getValue()), tag.getValue());
+        }
+        out.printf(";\n\n");
+        out.printf("private final String rawName;\n\n");
+        out.printf("%s(String rawName) {\n"
+                + "this.rawName = rawName;\n"
+                + "}\n\n", name);
+        out.printf("public String getRawName() {\n"
+                + "return rawName;\n"
+                + "}\n");
+        out.println("}");
     }
 
     private void printClass(CodeWriter out, String name, XsdComplexType complexType,
@@ -134,14 +162,14 @@ public class JavaCodeGenerator {
             if (element.getRef() == null && element.getType().getRef() == null
                     && element.getType() instanceof XsdComplexType) {
                 // print inner class for anonymous types
-                String innerName = Utils.toClassName(element.getName());
+                String innerName = Utils.toClassName(getElementName(element));
                 XsdComplexType innerType = (XsdComplexType) element.getType();
                 String innerNameScope = nameScope + name + ".";
                 printClass(out, innerName, innerType, innerNameScope);
                 out.println();
                 javaType = new JavaComplexType(innerNameScope + innerName);
             } else {
-                javaType = parseType(elementValue.getType(), elementValue.getName());
+                javaType = parseType(elementValue.getType(), getElementName(elementValue));
             }
             elementTypes.add(javaType);
         }
@@ -158,7 +186,8 @@ public class JavaCodeGenerator {
             XsdElement elementValue = resolveElement(element);
             String typeName = element.isMultiple() ? String.format("java.util.List<%s>",
                     type.getNullableName()) : type.getName();
-            out.printf("private %s %s;\n", typeName, Utils.toVariableName(elementValue.getName()));
+            out.printf("private %s %s;\n", typeName,
+                    Utils.toVariableName(getElementName(elementValue)));
         }
         for (int i = 0; i < attributeTypes.size(); ++i) {
             JavaType type = attributeTypes.get(i);
@@ -175,7 +204,7 @@ public class JavaCodeGenerator {
             JavaType type = elementTypes.get(i);
             XsdElement element = complexType.getElements().get(i);
             XsdElement elementValue = resolveElement(element);
-            printGetterAndSetter(out, type, Utils.toVariableName(elementValue.getName()),
+            printGetterAndSetter(out, type, Utils.toVariableName(getElementName(elementValue)),
                     element.isMultiple());
         }
         for (int i = 0; i < attributeTypes.size(); ++i) {
@@ -246,7 +275,7 @@ public class JavaCodeGenerator {
                 JavaType type = allElementTypes.get(i);
                 XsdElement element = allElements.get(i);
                 XsdElement elementValue = resolveElement(element);
-                String variableName = Utils.toVariableName(elementValue.getName());
+                String variableName = Utils.toVariableName(getElementName(elementValue));
                 out.printf("if (tagName.equals(\"%s\")) {\n", elementValue.getName());
                 if (type instanceof JavaSimpleType) {
                     out.print("raw = XmlParser.readText(parser);\n");
@@ -265,6 +294,8 @@ public class JavaCodeGenerator {
                     + "XmlParser.skip(parser);\n"
                     + "}\n"
                     + "}\n");
+        } else {
+            out.print("XmlParser.skip(parser);\n");
         }
         out.print("return instance;\n"
                 + "}\n");
@@ -355,6 +386,13 @@ public class JavaCodeGenerator {
                         + "}\n");
 
         out.println("}");
+    }
+
+    private String getElementName(XsdElement element) {
+        if (element instanceof XsdChoice) {
+            return element.getName() + "_optional";
+        }
+        return element.getName();
     }
 
     private void stackComponents(XsdComplexType complexType, List<XsdElement> elements,
@@ -465,6 +503,11 @@ public class JavaCodeGenerator {
         } else if (simpleType instanceof XsdRestriction) {
             // we don't consider any restrictions.
             XsdRestriction restriction = (XsdRestriction) simpleType;
+            if (restriction.getEnums() != null) {
+                String name = Utils.toClassName(restriction.getName());
+                return new JavaSimpleType(name, name + ".valueOf(%s.replace(\".\", \"_\")."
+                        + "replaceAll(\"[^A-Za-z0-9_]\", \"\"))", false);
+            }
             return parseSimpleType(restriction.getBase(), traverse);
         } else if (simpleType instanceof XsdUnion) {
             // unions are almost always interpreted as java.lang.String
