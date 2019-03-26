@@ -57,6 +57,7 @@ var (
 type xsdConfigProperties struct {
 	Srcs         []string
 	Package_name *string
+	Api_dir *string
 }
 
 type xsdConfig struct {
@@ -110,7 +111,7 @@ func (module *xsdConfig) GeneratedHeaderDirs() android.Paths {
 }
 
 func (module *xsdConfig) DepsMutator(ctx android.BottomUpMutatorContext) {
-	// no need to implement
+	android.ExtractSourcesDeps(ctx, module.properties.Srcs)
 }
 
 func (module *xsdConfig) GenerateAndroidBuildActions(ctx android.ModuleContext) {
@@ -124,15 +125,17 @@ func (module *xsdConfig) GenerateAndroidBuildActions(ctx android.ModuleContext) 
 		}
 	})
 
-	xsdFile := module.properties.Srcs[0]
+	srcFiles := ctx.ExpandSources(module.properties.Srcs, nil)
+	xsdFile := srcFiles[0]
+
 	pkgName := *module.properties.Package_name
 
 	module.genOutputs_j = android.PathForModuleGen(ctx, "java", "xsdcgen.srcjar")
 
 	ctx.Build(pctx, android.BuildParams{
 		Rule:        xsdcJavaRule,
-		Description: "xsdc " + xsdFile,
-		Input:       android.PathForModuleSrc(ctx, xsdFile),
+		Description: "xsdc " + xsdFile.String(),
+		Input:       xsdFile,
 		Implicit:    module.docsPath,
 		Output:      module.genOutputs_j,
 		Args: map[string]string{
@@ -147,8 +150,8 @@ func (module *xsdConfig) GenerateAndroidBuildActions(ctx android.ModuleContext) 
 
 	ctx.Build(pctx, android.BuildParams{
 		Rule:           xsdcCppRule,
-		Description:    "xsdc " + xsdFile,
-		Input:          android.PathForModuleSrc(ctx, xsdFile),
+		Description:    "xsdc " + xsdFile.String(),
+		Input:          xsdFile,
 		Implicit:       module.docsPath,
 		Output:         module.genOutputs_c,
 		ImplicitOutput: module.genOutputs_h,
@@ -168,8 +171,10 @@ func xsdConfigMutator(mctx android.TopDownMutatorContext) {
 			" --hide HiddenSuperclass --hide DeprecationMismatch --hide UnavailableSymbol" +
 			" --hide SdkConstant --hide HiddenTypeParameter --hide Todo --hide Typo"
 
-		currentApiFileName := filepath.Join("api", "current.txt")
-		removedApiFileName := filepath.Join("api", "removed.txt")
+		api_dir := proptools.StringDefault(module.properties.Api_dir, "api")
+
+		currentApiFileName := filepath.Join(api_dir, "current.txt")
+		removedApiFileName := filepath.Join(api_dir, "removed.txt")
 
 		check_api := CheckApi{}
 
@@ -177,9 +182,9 @@ func xsdConfigMutator(mctx android.TopDownMutatorContext) {
 		check_api.Current.Removed_api_file = proptools.StringPtr(removedApiFileName)
 
 		check_api.Last_released.Api_file = proptools.StringPtr(
-			filepath.Join("api", "last_current.txt"))
+			filepath.Join(api_dir, "last_current.txt"))
 		check_api.Last_released.Removed_api_file = proptools.StringPtr(
-			filepath.Join("api", "last_removed.txt"))
+			filepath.Join(api_dir, "last_removed.txt"))
 
 		mctx.CreateModule(android.ModuleFactoryAdaptor(java.DroidstubsFactory), &DroidstubsProperties{
 			Name:                 proptools.StringPtr(name + ".docs"),
