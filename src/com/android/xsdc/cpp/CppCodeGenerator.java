@@ -438,6 +438,7 @@ public class CppCodeGenerator {
 
         String className = Utils.toClassName(fileName);
 
+        boolean isMultiRootElement = xmlSchema.getElementMap().values().size() > 1;
         for (XsdElement element : xmlSchema.getElementMap().values()) {
             CppType cppType = parseType(element.getType(), element.getName());
             String elementName = element.getName();
@@ -445,8 +446,10 @@ public class CppCodeGenerator {
             String typeName = cppType instanceof CppSimpleType ? cppType.getName() :
                     Utils.toClassName(cppType.getName());
 
-            headerFile.printf("std::optional<%s> read(const char* configFile);\n\n", typeName);
-            cppFile.printf("std::optional<%s> read(const char* configFile) {\n", typeName);
+            headerFile.printf("std::optional<%s> read%s(const char* configFile);\n\n",
+                    typeName, isMultiRootElement ? Utils.capitalize(typeName) : "");
+            cppFile.printf("std::optional<%s> read%s(const char* configFile) {\n",
+                    typeName, isMultiRootElement ? Utils.capitalize(typeName) : "");
             cppFile.printf("auto doc = make_xmlUnique(xmlParseFile(configFile));\n"
                     + "if (doc == nullptr) {\n"
                     + "return std::nullopt;\n"
@@ -466,14 +469,16 @@ public class CppCodeGenerator {
                 cppFile.printf(cppType.getParsingExpression());
             }
             cppFile.printf("return value;\n}\n");
+            cppFile.printf("return std::nullopt;\n");
+            cppFile.printf("}\n\n");
         }
-        cppFile.printf("return std::nullopt;\n");
-        cppFile.printf("}\n\n");
     }
 
     private String getElementName(XsdElement element) {
         if (element instanceof XsdChoice) {
             return element.getName() + "_optional";
+        } else if (element instanceof XsdAll) {
+            return element.getName() + "_all";
         }
         return element.getName();
     }
@@ -695,9 +700,9 @@ public class CppCodeGenerator {
             case "nonPositiveInteger":
                 return new CppSimpleType("long long", "std::stoll(%s)", false);
             case "unsignedLong":
-                return new CppSimpleType("unsigned long", "std::stoul(%s)", false);
+                return new CppSimpleType("unsigned long long", "std::stoull(%s)", false);
             case "long":
-                return new CppSimpleType("long", "std::stol(%s)", false);
+                return new CppSimpleType("long long", "std::stoll(%s)", false);
             case "unsignedInt":
                 return new CppSimpleType("unsigned int",
                         "static_cast<unsigned int>(stoul(%s))", false);
