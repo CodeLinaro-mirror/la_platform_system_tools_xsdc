@@ -38,7 +38,7 @@ public:
 TEST_F(XmlTest, Simpletype) {
   using namespace simple::type;
   string file_name = "resources/simple_type.xml";
-  SimpleTypes simple = *read(file_name.c_str());
+  SimpleTypes simple = *readSimpleTypes(file_name.c_str());
 
   for (int i = 0; i < simple.getListInt().size(); ++i) {
     EXPECT_EQ(simple.getListInt()[i], i + 1);
@@ -179,7 +179,7 @@ TEST_F(XmlTest, Reference) {
 
 TEST_F(XmlTest, Simplecomplexcontent) {
   using namespace simple::complex::content;
-  Person person = *read("resources/simple_complex_content.xml");
+  Person person = *readPerson("resources/simple_complex_content.xml");
   USAddressP uSAddressP = *person.getFirstUSAddressP();
   KRAddress kRAddress = *person.getFirstKRAddress();
   SubAddress subAddress = *person.getFirstSubAddress();
