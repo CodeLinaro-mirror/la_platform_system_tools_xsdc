@@ -39,6 +39,10 @@ class CppSimpleType implements CppType {
         return list;
     }
 
+    boolean isEnum() {
+        return isEnum;
+    }
+
     CppSimpleType newListType() throws CppCodeGeneratorException {
         if (list) throw new CppCodeGeneratorException("list of list is not supported");
         return new CppSimpleType(name, rawParsingExpression, true);
@@ -59,9 +63,15 @@ class CppSimpleType implements CppType {
         if (list) {
             expression.append(
                     String.format("%s value;\n", getName()));
-            expression.append("for (auto& token : android::base::Split(raw, \" \")) {\n");
-            expression.append(String.format("value.push_back(std::move(%s));\n",
-                    String.format(rawParsingExpression, "token")));
+            expression.append(String.format("{\nint base = 0;\n"
+                    + "int found;\n"
+                    + "while(true) {\n"
+                    + "found = raw.find_first_of(\" \", base);\n"
+                    + "value.push_back(%s);\n"
+                    + "if (found == raw.npos) break;\n"
+                    + "base = found + 1;\n"
+                    + "}\n",
+                    String.format(rawParsingExpression, "raw.substr(base, found - base)")));
             expression.append("}\n");
         } else {
             expression.append(
@@ -94,7 +104,7 @@ class CppSimpleType implements CppType {
             expression.append(String.format("out << %s;\n}\n}\n", value));
         } else {
             if (isEnum) {
-                expression.append(String.format("out << %sToString(%s);\n", this.name, getValue));
+                expression.append(String.format("out << toString(%s);\n", getValue));
             } else if (this.name.equals("char") || this.name.equals("unsigned char")) {
                 expression.append(String.format("out << (int)%s;\n", getValue));
             } else if (this.name.equals("bool")) {
