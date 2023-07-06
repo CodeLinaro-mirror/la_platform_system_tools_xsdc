@@ -20,6 +20,7 @@ import (
 	"android/soong/android"
 	"android/soong/bp2build"
 	"android/soong/cc"
+	"android/soong/java"
 )
 
 const (
@@ -37,6 +38,17 @@ const (
 		bazel_module: {bp2build_available: false},
 	}
 	`
+	java_preamble = `
+	java_library {
+		name: "stub-annotations",
+		bazel_module: {bp2build_available: false},
+	}
+	java_library {
+		name: "kxml2-2.3.0",
+		host_supported: true,
+		bazel_module: {bp2build_available: false},
+	}
+	`
 )
 
 func runXsdConfigTest(t *testing.T, tc bp2build.Bp2buildTestCase) {
@@ -45,6 +57,7 @@ func runXsdConfigTest(t *testing.T, tc bp2build.Bp2buildTestCase) {
 		t,
 		func(ctx android.RegistrationContext) {
 			cc.RegisterLibraryBuildComponents(ctx)
+			ctx.RegisterModuleType("java_library", java.LibraryFactory)
 		},
 		tc,
 	)
@@ -55,7 +68,7 @@ func TestXsdConfigSimple(t *testing.T) {
 		Description:                "xsd_config simple",
 		ModuleTypeUnderTest:        "xsd_config",
 		ModuleTypeUnderTestFactory: xsdConfigFactory,
-		Blueprint: cc_preamble + `xsd_config {
+		Blueprint: cc_preamble + java_preamble + `xsd_config {
 	name: "foo",
 	srcs: ["foo.xsd"],
 }`,
@@ -68,6 +81,14 @@ func TestXsdConfigSimple(t *testing.T) {
 				"deps":                        `[":libxsdc-utils"]`,
 				"implementation_dynamic_deps": `[":libxml2"]`,
 			}),
+			bp2build.MakeBazelTargetNoRestrictions("java_xsd_config_library", "foo-java", bp2build.AttrNameToString{
+				"src": `"foo.xsd"`,
+				"deps": `[":stub-annotations"] + select({
+        "//build/bazel/platforms/os:android": [],
+        "//conditions:default": [":kxml2-2.3.0"],
+    })`,
+				"sdk_version": `"core_current"`,
+			}),
 		},
 	})
 }
@@ -77,7 +98,7 @@ func TestXsdConfig(t *testing.T) {
 		Description:                "xsd_config",
 		ModuleTypeUnderTest:        "xsd_config",
 		ModuleTypeUnderTestFactory: xsdConfigFactory,
-		Blueprint: cc_preamble + `xsd_config {
+		Blueprint: cc_preamble + java_preamble + `xsd_config {
 	name: "foo",
 	srcs: ["foo.xsd"],
 	include_files: ["foo.include.xsd"],
@@ -107,6 +128,61 @@ func TestXsdConfig(t *testing.T) {
 				"deps":                        `[":libxsdc-utils"]`,
 				"implementation_dynamic_deps": `[":libtinyxml2"]`,
 			}),
+			bp2build.MakeBazelTargetNoRestrictions("java_xsd_config_library", "foo-java", bp2build.AttrNameToString{
+				"src":            `"foo.xsd"`,
+				"include_files":  `["foo.include.xsd"]`,
+				"package_name":   `"foo"`,
+				"gen_writer":     `True`,
+				"boolean_getter": `True`,
+				"root_elements":  `["root_element"]`,
+				"deps": `[":stub-annotations"] + select({
+        "//build/bazel/platforms/os:android": [],
+        "//conditions:default": [":kxml2-2.3.0"],
+    })`,
+				"sdk_version": `"core_current"`,
+			}),
+		},
+	})
+}
+
+func TestCcAndJavaLibrariesUseXsdConfigGenSrcs(t *testing.T) {
+	runXsdConfigTest(t, bp2build.Bp2buildTestCase{
+		Description:                "cc_library and java_library use srcs generated from xsd_config",
+		ModuleTypeUnderTest:        "xsd_config",
+		ModuleTypeUnderTestFactory: xsdConfigFactory,
+		Blueprint: cc_preamble + java_preamble + `
+xsd_config {
+	name: "foo",
+	srcs: ["foo.xsd"],
+	bazel_module: {bp2build_available: false}
+}
+cc_library {
+	name: "cclib",
+	generated_sources: ["foo"],
+	generated_headers: ["foo"],
+}
+java_library {
+	name: "javalib",
+	srcs: [
+		"A.java",
+		":foo"
+	],
+}`,
+		ExpectedBazelTargets: []string{
+			bp2build.MakeBazelTarget("cc_library_static", "cclib_bp2build_cc_library_static", bp2build.AttrNameToString{
+				"local_includes": `["."]`,
+				"implementation_whole_archive_deps": `[":foo-cpp"]`,
+			}),
+			bp2build.MakeBazelTarget("cc_library_shared", "cclib", bp2build.AttrNameToString{
+				"local_includes": `["."]`,
+				"implementation_whole_archive_deps": `[":foo-cpp"]`,
+			}),
+			bp2build.MakeBazelTarget("java_library", "javalib", bp2build.AttrNameToString{
+				"srcs": `["A.java"]`,
+				"deps": `[":foo-java"]`,
+				"exports": `[":foo-java"]`,
+			}),
+			bp2build.MakeNeverlinkDuplicateTargetWithAttrs("java_library", "javalib", bp2build.AttrNameToString{}),
 		},
 	})
 }
